@@ -1,14 +1,16 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+
 public static class ApiProgram {
     public static void ConfigureApi(WebApplication app) {
-
         app.UseSwagger();
         app.UseSwaggerUI();
 
         app.MapGet("/api/status", async (HttpContext httpContext) => {
-            if (MainProgram.config?.InterfaceName == null || MainProgram.config?.ProcessName == null || MainProgram.config?.CheckInternetHost == null) {
+            if (MainProgram.config?.InterfaceName == null || MainProgram.config?.ProcessName == null || MainProgram.config?.PingHost == null) {
                 return Results.BadRequest("Configuration is missing.");
             }
-            var status = await MainProgram.StatusConnection(MainProgram.config.InterfaceName, MainProgram.config.ProcessName, MainProgram.config.CheckInternetHost);
+            var status = await MainProgram.StatusConnection(MainProgram.config.InterfaceName, MainProgram.config.ProcessName, MainProgram.config.PingHost);
             return Results.Ok(status);
         });
 
