@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Net.NetworkInformation;
-using System.Net;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -8,14 +7,14 @@ public class Config {
     public string? ProcessName { get; set; }
     public string? ExecPath { get; set; }
     public string? InterfaceName { get; set; }
-    public string? CheckInternetHost { get; set; }
+    public string? PingHost { get; set; }
     public string? ApiPort { get; set; }
 }
 
 public static class MainProgram {
     public static Config? config;
 
-    // Функция для загрузки конфигурационного файла
+    // Функция загрузки конфигурационного файла
     public static void LoadConfig() {
         try {
             string json = File.ReadAllText("vpnc.config.json");
@@ -27,7 +26,7 @@ public static class MainProgram {
         }
     }
 
-    // Функция для остановки процесса
+    // Функция остановки процесса
     public static void StopProcess(string processName) {
         try {
             Process[] processes = Process.GetProcessesByName(processName);
@@ -45,7 +44,7 @@ public static class MainProgram {
         }
     }
 
-    // Функция для запуска процесса
+    // Функция запуска процесса
     public static void StartProcess(string processPath) {
         try {
             ProcessStartInfo startInfo = new ProcessStartInfo {
@@ -60,20 +59,40 @@ public static class MainProgram {
         }
     }
 
-    // Функция для вызова остановки и последующего запуска процесса
+    // Функция вызова остановки и последующего запуска процесса
     public static void RestartProcess(string processName, string processPath) {
         StopProcess(processName);
         StartProcess(processPath);
     }
 
-    // Функция для получения статуса
-    public static async Task<object> StatusConnection(string interfaceName, string processName, string checkInternetHost) {
-        // Проверка статуса процесса
-        string processStatus;
+    // Функция проверка статуса процесса
+    public static string StatusProcess(string processName) {
         var processes = Process.GetProcessesByName(processName);
-        processStatus = processes.Length > 0 ? "Running" : "Not running";
+        return processes.Length > 0 ? "Running" : "Not running";
+    }
 
-        // Проверка статуса сетевого адаптера
+    // Функция получения uptime процесса
+    public static string UptimeProcess(string processName) {
+        var processes = Process.GetProcessesByName(processName);
+        if (processes.Length == 0) {
+            return "N/A";
+        } else {
+            var startTime = processes[0].StartTime;
+            var uptime = DateTime.Now - startTime;
+            return $"{uptime.Days}.{uptime.Hours}:{uptime.Minutes}:{uptime.Seconds}";
+        }        
+    }
+
+    // Функция получения uptime системы
+    public static string UptimeSystem() {
+        using var uptime = new PerformanceCounter("System", "System Up Time");
+        uptime.NextValue();
+        TimeSpan systemUptime = TimeSpan.FromSeconds(uptime.NextValue());
+        return $"{systemUptime.Days}.{systemUptime.Hours}:{systemUptime.Minutes}:{systemUptime.Seconds}";
+    }
+
+    // Функция получения статуса сетевого адаптера
+    public static string StatusInterface(string interfaceName) {
         string interfaceStatus = "Not found";
         foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces()) {
             if (ni.Name == interfaceName) {
@@ -81,16 +100,32 @@ public static class MainProgram {
                 break;
             }
         }
+        return interfaceStatus;
+    }
 
-        // ICMP-запрос для проверки интернет-соединения
+    // Функция ICMP-запроса для проверки интернет-соединения
+    public static (string internetStatus, string responseTimeOut) StatusPing(string PingHost) {
         using Ping ping = new Ping();
         string internetStatus = "Disconnected";
         string responseTimeOut = "N/A";
-        PingReply reply = ping.Send(checkInternetHost, 2000); // Timeout 2 seconds
+
+        PingReply reply = ping.Send(PingHost, 2000); // Timeout 2 seconds
         if (reply.Status == IPStatus.Success) {
             internetStatus = "Connected";
-            responseTimeOut = reply.RoundtripTime + " ms";
+            responseTimeOut = $"{reply.RoundtripTime} ms";
         }
+
+        return (internetStatus, responseTimeOut);
+    }
+
+    // Функция сбора всех метрик в формате json
+    public static async Task<object> StatusConnection(string interfaceName, string processName, string PingHost) {
+        // Собираем статусы из функций
+        string processStatus = StatusProcess(processName);
+        string processUptime = UptimeProcess(processName);
+        string systemUptime = UptimeSystem();
+        string interfaceStatus = StatusInterface(interfaceName);
+        var (internetStatus, responseTimeOut) = StatusPing(PingHost);
 
         // HTTP-запрос для получения информации о местоположении
         string urlCheckRegion = "https://ipinfo.io/json";
@@ -116,11 +151,13 @@ public static class MainProgram {
         return new {
             ProcessName = processName,
             ProcessStatus = processStatus,
+            ProcessUptime = processUptime,
+            SystemUptime = systemUptime,
             InterfaceName = interfaceName,
             InterfaceStatus = interfaceStatus,
-            InternetHost = checkInternetHost,
-            InternetStatus = internetStatus,
-            InternetTimeout = responseTimeOut,
+            PingAddress = PingHost,
+            PingStatus = internetStatus,
+            PingTimeout = responseTimeOut,
             Country = (string?)locationInfo?["country"] ?? "N/A",
             TimeZone = (string?)locationInfo?["timezone"] ?? "N/A",
             Region = (string?)locationInfo?["region"] ?? "N/A",
