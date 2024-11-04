@@ -1,4 +1,12 @@
 using System.Diagnostics;
+using System.Timers;
+using System.Windows.Forms;
+using System.IO;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
 public class TrayProgram {
     // Переменная для хранения процесса API
@@ -9,16 +17,21 @@ public class TrayProgram {
     private NotifyIcon notifyIcon;
     // Контекстное меню, которое будет отображаться при клике правой кнопкой на иконку
     private ContextMenuStrip contextMenu = new ContextMenuStrip();
+    private ToolStripMenuItem pingCheckItem;
     private ToolStripMenuItem toggleApiItem;
     private ToolStripMenuItem openSwaggerItem;
     private ToolStripMenuItem openConfigItem;
 
+    // Таймер для периодической проверки соединения
+    private System.Timers.Timer pingTimer;
+    private bool isPingCheckEnabled = false;
 
     // Элементы интерфейса
     public TrayProgram() {
+        pingCheckItem = new ToolStripMenuItem("Ping Monitoring", null, TogglePingCheck);
         toggleApiItem = new ToolStripMenuItem("API", null, ToggleApi);
-        openSwaggerItem = new ToolStripMenuItem("Swagger", null, OpenSwagger);
-        openConfigItem = new ToolStripMenuItem("Configuration", null, OpenConfiguration);
+        openSwaggerItem = new ToolStripMenuItem("Open Swagger", null, OpenSwagger);
+        openConfigItem = new ToolStripMenuItem("Open Configuration", null, OpenConfiguration);
 
         notifyIcon = new NotifyIcon {
             Icon = SystemIcons.Application,
@@ -26,8 +39,10 @@ public class TrayProgram {
             Visible = true
         };
 
-        // Обработчик двойного щелчка по иконке
-        // notifyIcon.DoubleClick += (s, e) => OpenSwagger();
+        // Интервал проверки 10 секунд
+        pingTimer = new System.Timers.Timer(10000);
+        pingTimer.Elapsed += PerformPingCheck;
+        pingTimer.AutoReset = true;
     }
 
     // Создание контекстного меню
@@ -37,15 +52,81 @@ public class TrayProgram {
 
         // Добавление кнопок в контекстное меню
         contextMenu.Items.AddRange(new ToolStripItem[] {
+            pingCheckItem,
             toggleApiItem,
             openSwaggerItem,
             openConfigItem,
             new ToolStripSeparator(),
             exitItem
         });
-        
+
         // Возвращаем созданное контекстное меню
         return contextMenu;
+    }
+
+    // Метод для остановки и запуска проверки интернета
+    private void TogglePingCheck(object? sender, EventArgs? e) {
+        isPingCheckEnabled = !isPingCheckEnabled;
+        pingCheckItem.Checked = isPingCheckEnabled;
+        if (isPingCheckEnabled) {
+            pingTimer.Start();
+        } else {
+            pingTimer.Stop();
+        }
+    }
+
+    // Переменная для отслеживания состояния интернета и отправки уведомлений
+    private bool wasInternetUnavailable = false;
+    private bool isStableConnectionCheck = false; // Переменная для отслеживания состояния проверки стабильного соединения
+    
+    // Метод для проверки Ping
+    private void PerformPingCheck(object? sender, ElapsedEventArgs e) {
+        string? pingHost = MainProgram.config?.PingHost?.ToString();
+        if (string.IsNullOrEmpty(pingHost)) return;
+    
+        bool isConnected = false;
+    
+        // Первичная проверка на подключение
+        for (int i = 0; i < 3; i++) {
+            var (internetStatus, responseTimeOut) = MainProgram.StatusPing(pingHost);
+            if (internetStatus == "Connected") {
+                isConnected = true;
+                break;
+            }
+        }
+    
+        // Если интернет недоступен
+        if (!isConnected) {
+            // Проверка, чтобы оповещение о недоступности отправлялось только один раз
+            if (!wasInternetUnavailable) {
+                notifyIcon.ShowBalloonTip(5000, "Internet connection", "Internet is unavailable", ToolTipIcon.Warning);
+                wasInternetUnavailable = true; // Установить флаг недоступности
+            }
+            pingTimer.Interval = 2000; // Устанавливаем интервал на 2 секунды
+            isStableConnectionCheck = false; // Сбрасываем проверку стабильного соединения
+        } else {
+            // Если интернет доступен и проверка стабильности не выполняется
+            if (!isStableConnectionCheck) {
+                isStableConnectionCheck = true; // Устанавливаем флаг проверки стабильности
+                bool stableConnection = true;
+    
+                // Выполняем дополнительные проверки стабильности
+                for (int i = 0; i < 2; i++) {
+                    Thread.Sleep(2000); // Пауза 2 секунды между проверками
+                    var (internetStatus, responseTimeOut) = MainProgram.StatusPing(pingHost);
+                    if (internetStatus != "Connected") {
+                        stableConnection = false;
+                        break;
+                    }
+                }
+    
+                // Если соединение стабильно, отправляем уведомление о доступности интернета
+                if (stableConnection) {
+                    notifyIcon.ShowBalloonTip(5000, "Internet connection", "Internet is available", ToolTipIcon.Info);
+                    wasInternetUnavailable = false; // Сбрасываем переменную
+                }
+            }
+        }
     }
 
     // Обработчик для переключения состояния API
@@ -111,25 +192,6 @@ public class TrayProgram {
         toggleApiItem.Checked = isApiRunning;
     }
 
-    // Обработчик открытия файла конфигурации
-    private void OpenConfiguration(object? sender, EventArgs? e) {
-        string configFilePath = "vpnc.config.json"; // Путь к конфигурационному файлу
-        // Проверка, что файл существует
-        if (File.Exists(configFilePath)) {
-            try {
-                // Открытие файла в редакторе по умолчанию
-                Process.Start(new ProcessStartInfo {
-                    FileName = configFilePath,
-                    UseShellExecute = true // Используем оболочку для открытия
-                });
-            } catch (Exception ex) {
-                MessageBox.Show($"Failed to open configuration file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        } else {
-            MessageBox.Show("Configuration file not found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-    }
-
     // Метод для отображения сообщения с URL API
     private void OpenSwagger(object? sender, EventArgs? e) {
         // Получение порта из конфигурации
@@ -147,6 +209,25 @@ public class TrayProgram {
             }
         } else {
             MessageBox.Show("Port not specified in configuration.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    // Обработчик открытия файла конфигурации
+    private void OpenConfiguration(object? sender, EventArgs? e) {
+        string configFilePath = "vpnc.config.json"; // Путь к конфигурационному файлу
+        // Проверка, что файл существует
+        if (File.Exists(configFilePath)) {
+            try {
+                // Открытие файла в редакторе по умолчанию
+                Process.Start(new ProcessStartInfo {
+                    FileName = configFilePath,
+                    UseShellExecute = true // Используем оболочку для открытия
+                });
+            } catch (Exception ex) {
+                MessageBox.Show($"Failed to open configuration file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        } else {
+            MessageBox.Show("Configuration file not found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 

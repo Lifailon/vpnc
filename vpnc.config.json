@@ -3,5 +3,6 @@
     "ProcessName": "hsscp",
     "ExecPath": "C:\\Program Files (x86)\\Hotspot Shield\\12.9.3\\bin\\hsscp.exe",
     "InterfaceName": "HotspotShield Network Adapter",
-    "PingHost": "8.8.8.8"
+    "PingHost": "yandex.ru",
+    "PingTimeout": 10
 }
