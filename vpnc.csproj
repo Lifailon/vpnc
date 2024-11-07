@@ -2,13 +2,35 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
+    <StartupObject>CliProgram</StartupObject>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <StartupObject>CliProgram</StartupObject>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <Version>0.1.0</Version>
+    <FileVersion>0.1.0</FileVersion>
+    <Authors>Lifailon</Authors>
+    <ProjectUrl>https://github.com/Lifailon/vpnc</ProjectUrl>
+    <AssemblyTitle>Universal tool for automatic (local) and remote VPN connection management via a desktop application (system tray) and API</AssemblyTitle>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>vpnc</ToolCommandName>
+    <PackageId>vpnc</PackageId>
+    <Description>Universal tool for automatic (local) and remote VPN connection management via a desktop application (system tray) and API</Description>
+    <Tags>CSharp, .NET, VPN, Cli, API, Tray</Tags>
+    <RepositoryUrl>https://github.com/Lifailon/vpnc</RepositoryUrl>
+    <LicenseUrl>https://github.com/Lifailon/vpnc/blob/main/LICENSE</LicenseUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
+    <Content Include="img\*.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="vpnc.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 </Project>
