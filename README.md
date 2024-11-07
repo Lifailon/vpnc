@@ -11,22 +11,22 @@ vpnc - VPN Control
 </h1>
 
 <h4 align="center">
-    <strong>English</strong> | <a href="README_RU.md">Русский</a>
+    <strong>English</strong> | <a href="README_ru.md">Русский</a>
 </h4>
 
 A universal tool for automatic (local) and remote VPN connection management via a desktop application (system tray) and `API`.
 
 ## For what
 
-I'm tired of the [Hotspot Shield](https://www.hotspotshield.com/vpn/vpn-for-windows) application periodically disconnecting the VPN connection, most often this happens due to a prolonged absence of an Internet connection. In this case, even if the automatic reconnection setting is enabled, the connection may simply not be established again, or this may be regarded by the application as a manual disconnection of the connection.
+I am tired of the fact that the [Hotspot Shield](https://www.hotspotshield.com/vpn/vpn-for-windows) application can periodically disconnect the VPN connection, most often this happens due to a long connection to the VPN network (several dozen hours) or a long absence of an Internet connection. In this case, even if the automatic reconnection setting is enabled, the connection may not be re-established, or this may be regarded by the application as a manual disconnection.
 
-This application performs exactly three functions - it terminates the process by name and starts the process along the path specified in the configuration file, and also collects statistics for a reliable check of the VPN connection and the availability of the Internet.
+This application performs exactly three functions - it terminates the process by name and starts the process along the path specified in the configuration file, and also collects statistics for a reliable check of the VPN connection and Internet availability.
 
-This approach is universal, so it can and will work with any VPN application, the only condition for the operability of this method is the ability to automatically connect to the VPN network when the application is launched (supported by most clients).
+This approach is universal, so it can and will work with any VPN application. The only condition for the operability of this method is the ability to automatically connect to the VPN network when the application is launched (supported by most clients).
 
 ## Functionality
 
-- The `API` interface, which allows you to configure remote management of the VPN connection on the target host. For example, in my network this is a dedicated machine, where access to specific content from other machines is carried out by means of Proxy, this is convenient so as not to limit all traffic to the Internet to a VPN connection and at the same time not to be limited to separate tunneling to the VPN network. The ability to remotely disable VPN can be useful when loading a large amount of traffic on the target machine, and also allows you to remotely control the connection, for example, via a Telegram bot.
+- The `API` interface, which allows you to configure remote management of the VPN connection on the target host. For example, in my network this is a dedicated machine, where access to specific content from other machines is carried out by means of Proxy (for example, [froxy](https://github.com/Lifailon/froxy)), this is convenient so as not to limit all traffic to the Internet to a VPN connection and at the same time not to be limited to separate tunneling to the VPN network. The ability to remotely disable VPN can be useful when loading a large amount of traffic on the target machine, and also allows you to remotely control the connection, for example, via a Telegram bot.
 
 > 📢 This functionality will be implemented in the [Kinozal-Bot](https://github.com/Lifailon/Kinozal-Bot) project in version `0.4.7`.
 
@@ -36,19 +36,20 @@ This approach is universal, so it can and will work with any VPN application, th
 
 ## Installation and build
 
-You can download a portable version of the application from the [GitHub repository](https://github.com/Lifailon/vpnc/releases/latest).
+It is necessary that the platform [.NET Runtime 8.0](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) be installed on the system to run .NET applications.
+
+Download the portable version of the application from [GitHub repository](https://github.com/Lifailon/vpnc/releases/latest).
 
 To build the application, clone the repository and install dependencies:
 
 ```shell
 git clone https://github.com/Lifailon/vpnc
 cd vpnc
-dotnet restore
 dotnet build
 dotnet publish
 ```
 
-To exclude installations of `.NET Runtime` on the target system, include it in the build:
+To exclude installations of **.NET Runtime** on the target system, include it in the build:
 
 ```shell
 dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true --self-contained true
