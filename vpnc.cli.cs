@@ -1,14 +1,16 @@
-﻿using Newtonsoft.Json;
-using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Hosting;
+using Newtonsoft.Json;
+using System.Diagnostics;
+using Microsoft.JSInterop.Infrastructure;
 
 class CliProgram {
     static async Task Main(string[] args) {
         MainProgram.LoadConfig();
         
         if (args.Length == 0) {
-            Console.WriteLine("vpnc [start|stop|restart|status|api|tray]");
+            Console.WriteLine("vpnc [start|stop|restart|status|api|tray|process]");
             return;
         }
 
@@ -24,20 +26,20 @@ class CliProgram {
                 break;
 
             case "start":
-                if (MainProgram.config?.ExecPath == null) {
-                    Console.WriteLine("Configuration parameters are empty: ExecPath");
+                if (MainProgram.config?.ProcessPath == null) {
+                    Console.WriteLine("Configuration parameters are empty: ProcessPath");
                     return;
                 } else {
-                    MainProgram.StartProcess(MainProgram.config.ExecPath);
+                    MainProgram.StartProcess(MainProgram.config.ProcessPath);
                 }
                 break;
 
             case "restart":
-                if (MainProgram.config?.ProcessName == null || MainProgram.config?.ExecPath == null) {
-                    Console.WriteLine("Configuration parameters are empty: ProcessName or ExecPath");
+                if (MainProgram.config?.ProcessName == null || MainProgram.config?.ProcessPath == null) {
+                    Console.WriteLine("Configuration parameters are empty: ProcessName or ProcessPath");
                     return;
                 } else {
-                    MainProgram.RestartProcess(MainProgram.config.ProcessName, MainProgram.config.ExecPath);
+                    MainProgram.RestartProcess(MainProgram.config.ProcessName, MainProgram.config.ProcessPath);
                 }
                 break;
 
@@ -72,9 +74,29 @@ class CliProgram {
             case "tray":
                 TrayProgram.Main();
                 return;
+
+            case "process":
+                string exec = Path.Combine(Environment.CurrentDirectory, "vpnc.exe");
+                string arguments = "tray";
+                if (!File.Exists(exec)) {
+                    exec = "dotnet";
+                    arguments = "run tray";
+                }
+                var trayProcess = new Process {
+                    StartInfo = new ProcessStartInfo {
+                        FileName = exec,
+                        Arguments = arguments,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+                trayProcess.Start();
+                return;
                 
             default:
-                Console.WriteLine("Invalid parameter. Use: vpnc [start|stop|restart|status|api|tray]");
+                Console.WriteLine("Invalid parameter. Use: vpnc [start|stop|restart|status|api|tray|process]");
                 break;
         }
     }
