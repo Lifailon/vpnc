@@ -1,12 +1,5 @@
 using System.Diagnostics;
 using System.Timers;
-using System.Windows.Forms;
-using System.IO;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 public class TrayProgram {
     // Переменная для хранения процесса API
@@ -18,31 +11,91 @@ public class TrayProgram {
     // Контекстное меню, которое будет отображаться при клике правой кнопкой на иконку
     private ContextMenuStrip contextMenu = new ContextMenuStrip();
     private ToolStripMenuItem pingCheckItem;
+    private ToolStripMenuItem vpnCheckItem;
     private ToolStripMenuItem toggleApiItem;
     private ToolStripMenuItem openSwaggerItem;
     private ToolStripMenuItem openConfigItem;
+    private ToolStripMenuItem startVPN;
+    private ToolStripMenuItem stopVPN;
+    private ToolStripMenuItem statusRegion;
 
-    // Таймер для периодической проверки соединения
+    // Таймер для проверки интернет соединения
     private System.Timers.Timer pingTimer;
     private bool isPingCheckEnabled = false;
+    // Таймер для проверки VPN соединения
+    private System.Timers.Timer vpnTimer;
+    private bool isVpnCheckEnabled = false;
+
+    // Переменные для хранения иконок
+    private Icon iconPingAvailable;
+    private Icon iconPingNotAvailable;
+    private Icon iconVPN;
 
     // Элементы интерфейса
     public TrayProgram() {
         pingCheckItem = new ToolStripMenuItem("Ping Monitoring", null, TogglePingCheck);
+        vpnCheckItem = new ToolStripMenuItem("VPN Monitoring", null, ToggleVpnCheck);
         toggleApiItem = new ToolStripMenuItem("API", null, ToggleApi);
         openSwaggerItem = new ToolStripMenuItem("Open Swagger", null, OpenSwagger);
         openConfigItem = new ToolStripMenuItem("Open Configuration", null, OpenConfiguration);
+        startVPN = new ToolStripMenuItem("Start VPN", null, StartVPN);
+        stopVPN = new ToolStripMenuItem("Stop VPN", null, StopVPN);
+        statusRegion = new ToolStripMenuItem("Show Region", null, async (sender, e) => await ShowStatusConnectionAsync());
 
+        // Конвертируем png в ico и сохраняем их в переменные
+        string pngPingAvailable = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "img\\ping-available.png");
+        using Bitmap bitmapPingAvailable = new Bitmap(pngPingAvailable);
+        iconPingAvailable = Icon.FromHandle(bitmapPingAvailable.GetHicon());
+
+        string pngPingNotAvailable = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "img\\ping-not-available.png");
+        using Bitmap bitmapPingNotAvailable = new Bitmap(pngPingNotAvailable);
+        iconPingNotAvailable = Icon.FromHandle(bitmapPingNotAvailable.GetHicon());
+
+        string pngVPN = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "img\\vpn.png");
+        using Bitmap bitmapVPN = new Bitmap(pngVPN);
+        iconVPN = Icon.FromHandle(bitmapVPN.GetHicon());
+
+        // Устанавливаем начальную иконку
         notifyIcon = new NotifyIcon {
-            Icon = SystemIcons.Application,
+            Icon = iconPingAvailable,
             ContextMenuStrip = CreateContextMenu(),
             Visible = true
         };
 
-        // Интервал проверки 10 секунд
-        pingTimer = new System.Timers.Timer(10000);
+        // Событие статуса при двойном клике на иконку
+        notifyIcon.MouseDoubleClick += async (sender, args) => await ShowStatusConnectionAsync();
+
+        // Устанавливаем таймеры для запуска функций при включении чекера
+        int pingTimeout = int.TryParse(MainProgram.config?.PingTimeout, out int pingTimeoutResult) ? pingTimeoutResult*1000 : 5000;
+        pingTimer = new System.Timers.Timer(pingTimeout);
         pingTimer.Elapsed += PerformPingCheck;
         pingTimer.AutoReset = true;
+
+        int vpnTimeout = int.TryParse(MainProgram.config?.VpnTimeout, out int vpnTimeoutResult) ? vpnTimeoutResult*1000 : 5000;
+        vpnTimer = new System.Timers.Timer(vpnTimeout);
+        vpnTimer.Elapsed += PerformVpnCheck;
+        vpnTimer.AutoReset = true;
+
+        // Автозапуск чекеров при запуске трея в зависимости от настроек в конфигурации
+        bool pingStartup = MainProgram.config?.PingStartup ?? false;
+        if (pingStartup) {
+            pingCheckItem.Checked = true;
+            isPingCheckEnabled = true;
+            pingTimer.Start();
+        };
+
+        bool vpnStartup = MainProgram.config?.VpnStartup ?? false;
+        if (vpnStartup) {
+            vpnCheckItem.Checked = true;            
+            isVpnCheckEnabled = true;
+            vpnTimer.Start();
+        };
+
+        bool apiStartup = MainProgram.config?.ApiStartup ?? false;
+        if (apiStartup) {
+            toggleApiItem.Checked = true;
+            StartApiProcess();
+        };
     }
 
     // Создание контекстного меню
@@ -53,9 +106,13 @@ public class TrayProgram {
         // Добавление кнопок в контекстное меню
         contextMenu.Items.AddRange(new ToolStripItem[] {
             pingCheckItem,
+            vpnCheckItem,
             toggleApiItem,
             openSwaggerItem,
             openConfigItem,
+            startVPN,
+            stopVPN,
+            statusRegion,
             new ToolStripSeparator(),
             exitItem
         });
@@ -81,35 +138,34 @@ public class TrayProgram {
     
     // Метод для проверки Ping
     private void PerformPingCheck(object? sender, ElapsedEventArgs e) {
-        string? pingHost = MainProgram.config?.PingHost?.ToString();
+        string pingHost = MainProgram.config?.PingHost?.ToString() ?? "8.8.8.8";
         if (string.IsNullOrEmpty(pingHost)) return;
-    
         bool isConnected = false;
-    
         // Первичная проверка на подключение
         for (int i = 0; i < 3; i++) {
             var (internetStatus, responseTimeOut) = MainProgram.StatusPing(pingHost);
+            // Debug
+            // Console.WriteLine($"Ping status: {internetStatus}");
             if (internetStatus == "Connected") {
                 isConnected = true;
                 break;
             }
         }
-    
-        // Если интернет недоступен
+        // Если ping недоступен
         if (!isConnected) {
             // Проверка, чтобы оповещение о недоступности отправлялось только один раз
             if (!wasInternetUnavailable) {
-                notifyIcon.ShowBalloonTip(5000, "Internet connection", "Internet is unavailable", ToolTipIcon.Warning);
+                notifyIcon.ShowBalloonTip(5000, "Internet connection", "Internet unavailable", ToolTipIcon.Warning);
                 wasInternetUnavailable = true; // Установить флаг недоступности
             }
             pingTimer.Interval = 2000; // Устанавливаем интервал на 2 секунды
             isStableConnectionCheck = false; // Сбрасываем проверку стабильного соединения
+            notifyIcon.Icon = iconPingNotAvailable;
         } else {
-            // Если интернет доступен и проверка стабильности не выполняется
+            // Если ping доступен и проверка стабильности не выполняется
             if (!isStableConnectionCheck) {
                 isStableConnectionCheck = true; // Устанавливаем флаг проверки стабильности
                 bool stableConnection = true;
-    
                 // Выполняем дополнительные проверки стабильности
                 for (int i = 0; i < 2; i++) {
                     Thread.Sleep(2000); // Пауза 2 секунды между проверками
@@ -119,11 +175,80 @@ public class TrayProgram {
                         break;
                     }
                 }
-    
-                // Если соединение стабильно, отправляем уведомление о доступности интернета
+                // Если соединение стабильно, отправляем уведомление о доступности интернета и изменяем иконку
                 if (stableConnection) {
-                    notifyIcon.ShowBalloonTip(5000, "Internet connection", "Internet is available", ToolTipIcon.Info);
+                    notifyIcon.ShowBalloonTip(5000, "Internet connection", "Internet available", ToolTipIcon.Info);
                     wasInternetUnavailable = false; // Сбрасываем переменную
+                    int pingTimeout = int.TryParse(MainProgram.config?.PingTimeout, out int pingTimeoutResult) ? pingTimeoutResult*1000 : 5000;
+                    pingTimer.Interval = pingTimeout;
+                    // Проверяем интерфейс и изменяем иконку
+                    string? interfaceName = MainProgram.config?.InterfaceName?.ToString();
+                    if (string.IsNullOrEmpty(interfaceName)) return;
+                    string interfaceStatus = MainProgram.StatusInterface(interfaceName);
+                    if (interfaceStatus == "Up") {
+                        notifyIcon.Icon = iconVPN;
+                    } else {
+                        notifyIcon.Icon = iconPingAvailable;
+                    }
+                }
+            }
+        }
+    }
+
+    // Метод для остановки и запуска проверки VPN
+    private void ToggleVpnCheck(object? sender, EventArgs? e) {
+        isVpnCheckEnabled = !isVpnCheckEnabled;
+        vpnCheckItem.Checked = isVpnCheckEnabled;
+        if (isVpnCheckEnabled) {
+            vpnTimer.Start();
+        } else {
+            vpnTimer.Stop();
+        }
+    }
+
+    private bool wasVpnUnavailable = false;
+
+    // Метод для проверки работоспособности VPN и автоматического переподключения, если процесс не остановлен вручную
+    private void PerformVpnCheck(object? sender, ElapsedEventArgs e) {
+        string? interfaceName = MainProgram.config?.InterfaceName?.ToString();
+        string? processName = MainProgram.config?.ProcessName?.ToString();
+        string? processPath = MainProgram.config?.ProcessPath?.ToString();
+        if (string.IsNullOrEmpty(interfaceName) || string.IsNullOrEmpty(processName) || string.IsNullOrEmpty(processPath)) return;
+        Process[] processes = Process.GetProcessesByName(processName);
+        if (processes.Length == 0) {
+            if (notifyIcon.Icon == iconVPN || notifyIcon.Icon != iconPingNotAvailable) {
+                notifyIcon.Icon = iconPingAvailable;
+            }
+            return;
+        }
+        string interfaceStatus = MainProgram.StatusInterface(interfaceName);
+        // Debug
+        // Console.WriteLine($"Interface status: {interfaceStatus}");
+        if (interfaceStatus != "Up" && processes.Length != 0) {
+            if (notifyIcon.Icon != iconPingNotAvailable) {
+                notifyIcon.Icon = iconPingAvailable;
+            }
+            if (!wasVpnUnavailable) {
+                notifyIcon.ShowBalloonTip(5000, "VPN connection", "VPN unavailable", ToolTipIcon.Warning);
+                wasVpnUnavailable = true;
+            }
+            Task.Delay(2000);
+            processes = Process.GetProcessesByName(processName);
+            if (processes.Length != 0) {
+                vpnTimer.Interval = 25000; // Интервал в 25 секунд для перезапуска процесса
+                MainProgram.RestartProcess(processName, processPath);
+            }
+        } else {
+            if (notifyIcon.Icon != iconPingNotAvailable) {
+                notifyIcon.Icon = iconVPN;
+            }
+            if (wasVpnUnavailable) {
+                interfaceStatus = MainProgram.StatusInterface(interfaceName);
+                if (interfaceStatus == "Up") {
+                    notifyIcon.ShowBalloonTip(5000, "VPN connection", "VPN available", ToolTipIcon.Info);
+                    wasVpnUnavailable = false;
+                    int vpnTimeout = int.TryParse(MainProgram.config?.VpnTimeout, out int vpnTimeoutResult) ? vpnTimeoutResult*1000 : 5000;
+                    vpnTimer.Interval = vpnTimeout;
                 }
             }
         }
@@ -145,11 +270,17 @@ public class TrayProgram {
     private void StartApiProcess() {
         // Проверяем, если процесс API не существует или завершён
         if (apiProcess == null || apiProcess.HasExited) {
+            string exec = Path.Combine(Environment.CurrentDirectory, "vpnc.exe");
+            string arguments = "api";
+            if (!File.Exists(exec)) {
+                exec = "dotnet";
+                arguments = "run api";
+            }
             // Создание нового процесса для запуска API
             apiProcess = new Process {
                 StartInfo = new ProcessStartInfo {
-                    FileName = "dotnet",
-                    Arguments = "run api",
+                    FileName = exec,
+                    Arguments = arguments,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -192,7 +323,7 @@ public class TrayProgram {
         toggleApiItem.Checked = isApiRunning;
     }
 
-    // Метод для отображения сообщения с URL API
+    // Метод открытия URL с Swagger API
     private void OpenSwagger(object? sender, EventArgs? e) {
         // Получение порта из конфигурации
         string? port = MainProgram.config?.ApiPort?.ToString();
@@ -214,7 +345,7 @@ public class TrayProgram {
 
     // Обработчик открытия файла конфигурации
     private void OpenConfiguration(object? sender, EventArgs? e) {
-        string configFilePath = "vpnc.config.json"; // Путь к конфигурационному файлу
+        string configFilePath = "vpnc.json"; // Путь к конфигурационному файлу
         // Проверка, что файл существует
         if (File.Exists(configFilePath)) {
             try {
@@ -229,6 +360,32 @@ public class TrayProgram {
         } else {
             MessageBox.Show("Configuration file not found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+    }
+
+    // Методы для остановки и запуска процесса VPN
+    private void StartVPN(object? sender, EventArgs? e) {
+        string? processPath = MainProgram.config?.ProcessPath?.ToString();
+        if (!string.IsNullOrEmpty(processPath)) {
+            MainProgram.StartProcess(processPath);
+        }
+    }
+
+    private void StopVPN(object? sender, EventArgs? e) {
+        string? processName = MainProgram.config?.ProcessName?.ToString();
+        if (!string.IsNullOrEmpty(processName)) {
+            MainProgram.StopProcess(processName);
+        }
+    }
+
+    private async Task ShowStatusConnectionAsync() {
+        dynamic statusResult = await MainProgram.GetLocationInfo("Connected");
+        // Debug
+        // Console.WriteLine($"statusResult: {statusResult}");
+        var statusText= $"Time Zone: {statusResult.timezone}\n" +
+                        $"Region: {statusResult.region}\n" +
+                        $"City: {statusResult.city}\n" +
+                        $"External IP: {statusResult.ip}";
+        notifyIcon.ShowBalloonTip(5000, $"Connection country: {statusResult.country}", statusText, ToolTipIcon.Info);
     }
 
     // Обработчик выхода из приложения
