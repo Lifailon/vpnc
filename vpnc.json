@@ -1,0 +1,12 @@
+{
+    "ProcessName": "hsscp",
+    "ProcessPath": "C:\\Program Files (x86)\\Hotspot Shield\\12.9.3\\bin\\hsscp.exe",
+    "InterfaceName": "HotspotShield Network Adapter",
+    "PingHost": "google.com",
+    "ApiPort": 1780,
+    "PingStartup": true,
+    "VpnStartup": true,
+    "ApiStartup": false,
+    "PingTimeout": 5,
+    "VpnTimeout": 5
+}

@@ -1,8 +1,0 @@
-{
-    "ApiPort": 1780,
-    "ProcessName": "hsscp",
-    "ExecPath": "C:\\Program Files (x86)\\Hotspot Shield\\12.9.3\\bin\\hsscp.exe",
-    "InterfaceName": "HotspotShield Network Adapter",
-    "PingHost": "yandex.ru",
-    "PingTimeout": 10
-}
