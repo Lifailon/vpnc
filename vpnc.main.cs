@@ -5,10 +5,15 @@ using Newtonsoft.Json.Linq;
 
 public class Config {
     public string? ProcessName { get; set; }
-    public string? ExecPath { get; set; }
+    public string? ProcessPath { get; set; }
     public string? InterfaceName { get; set; }
     public string? PingHost { get; set; }
     public string? ApiPort { get; set; }
+    public string? PingTimeout { get; set; }
+    public string? VpnTimeout { get; set; }
+    public bool? PingStartup { get; set; }
+    public bool? VpnStartup { get; set; }
+    public bool? ApiStartup { get; set; }
 }
 
 public static class MainProgram {
@@ -17,7 +22,7 @@ public static class MainProgram {
     // Функция загрузки конфигурационного файла
     public static void LoadConfig() {
         try {
-            string json = File.ReadAllText("vpnc.config.json");
+            string json = File.ReadAllText("vpnc.json");
             config = JsonConvert.DeserializeObject<Config>(json);
         }
         catch (Exception ex) {
@@ -118,18 +123,11 @@ public static class MainProgram {
         return (internetStatus, responseTimeOut);
     }
 
-    // Функция сбора всех метрик в формате json
-    public static async Task<object> StatusConnection(string interfaceName, string processName, string PingHost) {
-        // Собираем статусы из функций
-        string processStatus = StatusProcess(processName);
-        string processUptime = UptimeProcess(processName);
-        string systemUptime = UptimeSystem();
-        string interfaceStatus = StatusInterface(interfaceName);
-        var (internetStatus, responseTimeOut) = StatusPing(PingHost);
+    // HTTP-запрос для получения информации о местоположении
+    public static async Task<dynamic> GetLocationInfo(string internetStatus) {
 
-        // HTTP-запрос для получения информации о местоположении
         string urlCheckRegion = "https://ipinfo.io/json";
-        JObject? locationInfo = null;
+        JObject locationInfo = new JObject();
         if (internetStatus == "Connected") {
             using HttpClient client = new HttpClient {
                 Timeout = TimeSpan.FromSeconds(5) // Timeout 5 seconds
@@ -141,13 +139,24 @@ public static class MainProgram {
                 locationInfo = JObject.Parse(locationJson);
             }
             catch (Exception ex) {
-                locationInfo = new JObject { ["error"] = ex.Message };
+                locationInfo["error"] = ex.Message;
             }
         } else {
-            locationInfo = new JObject { ["status"] = "Not available" };
+            locationInfo["status"] = "Not available";
         }
+        return locationInfo;
+    }
 
-        // Ответ в формате JSON
+    // Функция сбора всех метрик в формате json
+    public static async Task<object> StatusConnection(string interfaceName, string processName, string PingHost) {
+        // Собираем всю информацию из функций и возвращаем ответ в формате JSON
+        string processStatus = StatusProcess(processName);
+        string processUptime = UptimeProcess(processName);
+        string systemUptime = UptimeSystem();
+        string interfaceStatus = StatusInterface(interfaceName);
+        var (internetStatus, responseTimeOut) = StatusPing(PingHost);
+        JObject locationInfo = await GetLocationInfo(internetStatus);
+        // Формируем ответ в формате JSON
         return new {
             ProcessName = processName,
             ProcessStatus = processStatus,
@@ -162,7 +171,6 @@ public static class MainProgram {
             TimeZone = (string?)locationInfo?["timezone"] ?? "N/A",
             Region = (string?)locationInfo?["region"] ?? "N/A",
             City = (string?)locationInfo?["city"] ?? "N/A",
-            Location = (string?)locationInfo?["loc"] ?? "N/A",
             ExternalIp = (string?)locationInfo?["ip"] ?? "N/A"
         };
     }
