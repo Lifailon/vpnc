@@ -15,18 +15,18 @@ public static class ApiProgram {
         });
 
         app.MapPost("/api/start", (HttpContext httpContext) => {
-            if (MainProgram.config?.ExecPath == null) {
+            if (MainProgram.config?.ProcessPath == null) {
                 return Results.BadRequest("No executable path found in configuration.");
             }
-            MainProgram.StartProcess(MainProgram.config.ExecPath);
+            MainProgram.StartProcess(MainProgram.config.ProcessPath);
             return Results.Ok("Process started");
         });
 
         app.MapPost("/api/restart", (HttpContext httpContext) => {
-            if (MainProgram.config?.ProcessName == null || MainProgram.config?.ExecPath == null) {
+            if (MainProgram.config?.ProcessName == null || MainProgram.config?.ProcessPath == null) {
                 return Results.BadRequest("No process name found in configuration.");
             }
-            MainProgram.RestartProcess(MainProgram.config.ProcessName, MainProgram.config.ExecPath);
+            MainProgram.RestartProcess(MainProgram.config.ProcessName, MainProgram.config.ProcessPath);
             return Results.Ok("Process restarted");
         });
 
