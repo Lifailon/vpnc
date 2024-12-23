@@ -9,8 +9,8 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
-    <Version>0.1.0</Version>
-    <FileVersion>0.1.0</FileVersion>
+    <Version>0.2.0</Version>
+    <FileVersion>0.2.0</FileVersion>
     <Authors>Lifailon</Authors>
     <ProjectUrl>https://github.com/Lifailon/vpnc</ProjectUrl>
     <AssemblyTitle>VPN Control</AssemblyTitle>

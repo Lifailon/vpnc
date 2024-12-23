@@ -38,6 +38,7 @@ public class TrayProgram {
         toggleApiItem = new ToolStripMenuItem("API", null, ToggleApi);
         openSwaggerItem = new ToolStripMenuItem("Open Swagger", null, OpenSwagger);
         openConfigItem = new ToolStripMenuItem("Open Configuration", null, OpenConfiguration);
+        openConfigItem = new ToolStripMenuItem("Open Log", null, OpenLogFile);
         startVPN = new ToolStripMenuItem("Start VPN", null, StartVPN);
         stopVPN = new ToolStripMenuItem("Stop VPN", null, StopVPN);
         statusRegion = new ToolStripMenuItem("Show Region", null, async (sender, e) => await ShowStatusConnectionAsync());
@@ -65,7 +66,7 @@ public class TrayProgram {
         // Событие статуса при двойном клике на иконку
         notifyIcon.MouseDoubleClick += async (sender, args) => await ShowStatusConnectionAsync();
 
-        // Устанавливаем таймеры для запуска функций при включении чекера
+        // Устанавливаем таймеры для запуска функций при включении чекера (по умолчанию, 5 секунд)
         int pingTimeout = int.TryParse(MainProgram.config?.PingTimeout, out int pingTimeoutResult) ? pingTimeoutResult*1000 : 5000;
         pingTimer = new System.Timers.Timer(pingTimeout);
         pingTimer.Elapsed += PerformPingCheck;
@@ -235,8 +236,11 @@ public class TrayProgram {
             Task.Delay(2000);
             processes = Process.GetProcessesByName(processName);
             if (processes.Length != 0) {
-                vpnTimer.Interval = 25000; // Интервал в 25 секунд для перезапуска процесса
-                MainProgram.RestartProcess(processName, processPath);
+                // Задержка для перезапуска процесса (по умолчанию, 2 минуты)
+                int VpnRestartTimeout = int.TryParse(MainProgram.config?.VpnRestartTimeout, out int VpnRestartTimeoutResult) ? VpnRestartTimeoutResult*1000 : 120000;
+                vpnTimer.Interval = VpnRestartTimeout;
+                MainProgram.StopProcess(processName, true);
+                MainProgram.StartProcess(processPath);
             }
         } else {
             if (notifyIcon.Icon != iconPingNotAvailable) {
@@ -281,9 +285,9 @@ public class TrayProgram {
                 StartInfo = new ProcessStartInfo {
                     FileName = exec,
                     Arguments = arguments,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
+                    // RedirectStandardOutput = true,
+                    // RedirectStandardError = true,
+                    // UseShellExecute = false,
                     CreateNoWindow = true
                 }
             };
@@ -345,7 +349,7 @@ public class TrayProgram {
 
     // Обработчик открытия файла конфигурации
     private void OpenConfiguration(object? sender, EventArgs? e) {
-        string configFilePath = "vpnc.json"; // Путь к конфигурационному файлу
+        string configFilePath = "vpnc.json";
         // Проверка, что файл существует
         if (File.Exists(configFilePath)) {
             try {
@@ -362,6 +366,23 @@ public class TrayProgram {
         }
     }
 
+    private void OpenLogFile(object? sender, EventArgs? e) {
+        string configFilePath = "vpnc.log";
+        if (File.Exists(configFilePath)) {
+            try {
+                // Открытие файла в редакторе по умолчанию
+                Process.Start(new ProcessStartInfo {
+                    FileName = configFilePath,
+                    UseShellExecute = true
+                });
+            } catch (Exception ex) {
+                MessageBox.Show($"Failed to open log file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        } else {
+            MessageBox.Show("Log file not found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
     // Методы для остановки и запуска процесса VPN
     private void StartVPN(object? sender, EventArgs? e) {
         string? processPath = MainProgram.config?.ProcessPath?.ToString();
@@ -373,7 +394,7 @@ public class TrayProgram {
     private void StopVPN(object? sender, EventArgs? e) {
         string? processName = MainProgram.config?.ProcessName?.ToString();
         if (!string.IsNullOrEmpty(processName)) {
-            MainProgram.StopProcess(processName);
+            MainProgram.StopProcess(processName, true);
         }
     }
 

@@ -3,7 +3,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Hosting;
 using Newtonsoft.Json;
 using System.Diagnostics;
-using Microsoft.JSInterop.Infrastructure;
+using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Http;
 
 class CliProgram {
     static async Task Main(string[] args) {
@@ -21,7 +22,7 @@ class CliProgram {
                     Console.WriteLine("Configuration parameters are empty: ProcessName");
                     return;
                 } else {
-                    MainProgram.StopProcess(MainProgram.config.ProcessName);
+                    MainProgram.StopProcess(MainProgram.config.ProcessName, true);
                 }
                 break;
 
@@ -31,15 +32,6 @@ class CliProgram {
                     return;
                 } else {
                     MainProgram.StartProcess(MainProgram.config.ProcessPath);
-                }
-                break;
-
-            case "restart":
-                if (MainProgram.config?.ProcessName == null || MainProgram.config?.ProcessPath == null) {
-                    Console.WriteLine("Configuration parameters are empty: ProcessName or ProcessPath");
-                    return;
-                } else {
-                    MainProgram.RestartProcess(MainProgram.config.ProcessName, MainProgram.config.ProcessPath);
                 }
                 break;
 
@@ -54,18 +46,63 @@ class CliProgram {
                 break;
 
             case "api":
+                // Конфигурация API
                 var builder = WebApplication.CreateBuilder(args);
-
                 var port = MainProgram.config?.ApiPort;
                 builder.WebHost.UseUrls($"http://*:{port}");
 
+                // Добавление авторизации в интерфейс Swagger
                 builder.Services.AddEndpointsApiExplorer();
-                builder.Services.AddSwaggerGen();
-
+                builder.Services.AddSwaggerGen(c => {
+                    // Определяем схему безопасности для использования API ключа
+                    c.AddSecurityDefinition("ApiKey", new OpenApiSecurityScheme {
+                        Description = "API Key needed to access the endpoints. X-API-KEY: {apiKey}",
+                        Name = "X-API-KEY",
+                        In = ParameterLocation.Header,
+                        Type = SecuritySchemeType.ApiKey,
+                        Scheme = "ApiKeyScheme"
+                    });
+                    // Добавляем требование безопасности для всех эндпоинтов API
+                    c.AddSecurityRequirement(new OpenApiSecurityRequirement {
+                        {
+                            new OpenApiSecurityScheme {
+                                Reference = new OpenApiReference {
+                                    Type = ReferenceType.SecurityScheme,
+                                    Id = "ApiKey"
+                                },
+                                In = ParameterLocation.Header
+                            },
+                            new List<string>()
+                        }
+                    });
+                });
                 var app = builder.Build();
+
+                // Исключаем проверку API-ключа для Swagger UI
+                app.Use(async (context, next) => {
+                    var path = context.Request.Path.Value?.ToLower() ?? string.Empty; // Защищаем от null
+                    // Пропускаем проверку API-ключа для маршрутов Swagger
+                    if (path.Contains("/swagger")) {
+                        await next();
+                        return;
+                    }
+                    // Извлекаем API-ключ из заголовка
+                    var apiKeyHeader = context.Request.Headers["X-API-KEY"].ToString();
+                    // Проверяем валидность API-ключа
+                    if (string.IsNullOrEmpty(apiKeyHeader) || apiKeyHeader != MainProgram.config?.ApiKey) {
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        await context.Response.WriteAsync("Unauthorized: Invalid API Key.");
+                        return;
+                    }
+                    // Если ключ валидный, пропускаем запросы
+                    await next();
+                });
+
+                // Включаем Swagger и Swagger UI
                 app.UseSwagger();
                 app.UseSwaggerUI();
 
+                // Добавляем конфигурацию маршрутов API (endpoints)
                 ApiProgram.ConfigureApi(app);
 
                 await app.RunAsync();
@@ -96,7 +133,7 @@ class CliProgram {
                 return;
                 
             default:
-                Console.WriteLine("Invalid parameter. Use: vpnc [start|stop|restart|status|api|tray|process]");
+                Console.WriteLine("Invalid parameter. Use: vpnc [start|stop|status|api|tray|process]");
                 break;
         }
     }

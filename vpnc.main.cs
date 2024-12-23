@@ -7,10 +7,13 @@ public class Config {
     public string? ProcessName { get; set; }
     public string? ProcessPath { get; set; }
     public string? InterfaceName { get; set; }
-    public string? PingHost { get; set; }
     public string? ApiPort { get; set; }
+    public string? ApiKey { get; set; }
+    public string? PingHost { get; set; }
+    public bool? PingLog { get; set; }
     public string? PingTimeout { get; set; }
     public string? VpnTimeout { get; set; }
+    public string? VpnRestartTimeout { get; set; }
     public bool? PingStartup { get; set; }
     public bool? VpnStartup { get; set; }
     public bool? ApiStartup { get; set; }
@@ -32,17 +35,55 @@ public static class MainProgram {
     }
 
     // Функция остановки процесса
-    public static void StopProcess(string processName) {
+    public static void StopProcess(string processName, bool wildcard) {
         try {
-            Process[] processes = Process.GetProcessesByName(processName);
+            Process[] processes;
+            if (wildcard) {
+                // Получаем все процессы и фильтруем по совпадению с processName
+                processes = Process.GetProcesses()
+                    .Where(p => p.ProcessName.IndexOf(processName, StringComparison.OrdinalIgnoreCase) >= 0)
+                    .ToArray();
+                }
+                else {
+                    // Получаем процессы по точному имени
+                    processes = Process.GetProcessesByName(processName);
+                }
             if (processes.Length == 0) {
                 Console.WriteLine("Process not running");
                 return;
             }
             foreach (Process process in processes) {
+                Console.WriteLine($"Stopping process: {process.ProcessName} (PID: {process.Id})");
                 process.Kill();
-                process.WaitForExit();
+                // process.WaitForExit();
             }
+            Console.WriteLine("Processes stopped successfully");
+        }
+        catch (Exception ex) {
+            Console.WriteLine($"Error stopping process: {ex.Message}");
+        }
+    }
+
+    // Асинхронное завершение процесса
+    public static async Task StopProcessAsync(string processName, bool wildcard) {
+        try {
+            Process[] processes;
+            if (wildcard) {
+                processes = Process.GetProcesses()
+                    .Where(p => p.ProcessName.IndexOf(processName, StringComparison.OrdinalIgnoreCase) >= 0)
+                    .ToArray();
+            } else {
+                processes = Process.GetProcessesByName(processName);
+            }
+            if (processes.Length == 0) {
+                Console.WriteLine("Process not running");
+                return;
+            }
+            foreach (Process process in processes) {
+                Console.WriteLine($"Stopping process: {process.ProcessName} (PID: {process.Id})");
+                await Task.Run(() => process.Kill());
+            }
+            Console.WriteLine("Processes stopped successfully");
         }
         catch (Exception ex) {
             Console.WriteLine($"Error stopping process: {ex.Message}");
@@ -64,10 +105,14 @@ public static class MainProgram {
         }
     }
 
-    // Функция вызова остановки и последующего запуска процесса
-    public static void RestartProcess(string processName, string processPath) {
-        StopProcess(processName);
-        StartProcess(processPath);
+    // Функция проверки существования процесса
+    public static bool CheckProcess(string processName, bool wildcard = false) {
+        try {
+            var processes = Process.GetProcesses();
+            return wildcard 
+                ? processes.Any(p => p.ProcessName.IndexOf(processName, StringComparison.OrdinalIgnoreCase) >= 0) 
+                : Process.GetProcessesByName(processName).Length > 0;
+        } catch { return false; }
     }
 
     // Функция проверка статуса процесса
@@ -113,14 +158,28 @@ public static class MainProgram {
         using Ping ping = new Ping();
         string internetStatus = "Disconnected";
         string responseTimeOut = "N/A";
-
         PingReply reply = ping.Send(PingHost, 2000); // Timeout 2 seconds
         if (reply.Status == IPStatus.Success) {
             internetStatus = "Connected";
             responseTimeOut = $"{reply.RoundtripTime} ms";
         }
-
+        // Запись в лог
+        if (config != null && config.PingLog == true) {
+            LogToFile(PingHost, internetStatus, responseTimeOut);
+        }
         return (internetStatus, responseTimeOut);
+    }
+
+    private static void LogToFile(string PingHost, string internetStatus, string responseTimeOut) {
+        string logFilePath = "vpnc.log";
+        string logMessage = $"{DateTime.Now:dd.MM.yyyy HH:mm:ss}: {PingHost} - {internetStatus} ({responseTimeOut})";
+        try {
+            using (StreamWriter writer = new StreamWriter(logFilePath, true)) {
+                writer.WriteLine(logMessage);
+            }
+        } catch (Exception ex) {
+            Console.WriteLine($"Error writing to log file: {ex.Message}");
+        }
     }
 
     // HTTP-запрос для получения информации о местоположении
