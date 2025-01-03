@@ -126,7 +126,7 @@ Get-Process *protonvpn*
 # Path to executable file by process name
 Get-Process *protonvpn* | Select-Object *path*
 # Network adapter name
-Get-NetIPConfiguration | Where-Object InterfaceAlias -match "proton"
+$(Get-NetIPConfiguration | Where-Object InterfaceAlias -match "hotspot").InterfaceAlias
 ```
 
 The remaining parameters can be left as default. To apply the settings, you must restart the application.

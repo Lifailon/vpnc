@@ -126,7 +126,7 @@ Get-Process *protonvpn*
 # Путь к исполняемому файлу по имени процесса
 Get-Process *protonvpn* | Select-Object *path*
 # Имя сетевого адаптера
-Get-NetIPConfiguration | Where-Object InterfaceAlias -match "proton"
+$(Get-NetIPConfiguration | Where-Object InterfaceAlias -match "hotspot").InterfaceAlias
 ```
 
 Остальные параметры можно оставить по умолчанию. Для применения настроект, необходимо перезапустить приложение.
