@@ -15,6 +15,7 @@ public class TrayProgram {
     private ToolStripMenuItem toggleApiItem;
     private ToolStripMenuItem openSwaggerItem;
     private ToolStripMenuItem openConfigItem;
+    private ToolStripMenuItem openLogItem;
     private ToolStripMenuItem startVPN;
     private ToolStripMenuItem stopVPN;
     private ToolStripMenuItem statusRegion;
@@ -38,7 +39,7 @@ public class TrayProgram {
         toggleApiItem = new ToolStripMenuItem("API", null, ToggleApi);
         openSwaggerItem = new ToolStripMenuItem("Open Swagger", null, OpenSwagger);
         openConfigItem = new ToolStripMenuItem("Open Configuration", null, OpenConfiguration);
-        openConfigItem = new ToolStripMenuItem("Open Log", null, OpenLogFile);
+        openLogItem = new ToolStripMenuItem("Open Log", null, OpenLogFile);
         startVPN = new ToolStripMenuItem("Start VPN", null, StartVPN);
         stopVPN = new ToolStripMenuItem("Stop VPN", null, StopVPN);
         statusRegion = new ToolStripMenuItem("Show Region", null, async (sender, e) => await ShowStatusConnectionAsync());
@@ -111,6 +112,7 @@ public class TrayProgram {
             toggleApiItem,
             openSwaggerItem,
             openConfigItem,
+            openLogItem,
             startVPN,
             stopVPN,
             statusRegion,
